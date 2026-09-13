@@ -15,7 +15,7 @@ permissions:
 
 env:
   IMAGE_NAME: 2024dock/cdc-backend
-  GITOPS_REPO: 2024dock/devops-project
+  GITOPS_REPO: Raju7061/devops-project
   GITOPS_BRANCH: RTR-postgres
 
 jobs:
@@ -54,7 +54,7 @@ jobs:
       - name: Checkout GitOps Repository
         uses: actions/checkout@v4
         with:
-          repository: 2024dock/devops-project
+          repository: Raju7061/devops-project
           ref: RTR-postgres
           token: ${{ secrets.GITOPS_REPO_TOKEN }}
           path: gitops
