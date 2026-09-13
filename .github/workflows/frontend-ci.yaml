@@ -69,7 +69,7 @@ jobs:
         run: |
           cd gitops
 
-          yq -i '.image.tag = env(IMAGE_TAG)' charts/raju-stack/charts/frontend/values.yaml
+          yq -i '.image.tag = env(IMAGE_TAG)' charts/frontend/values.yaml
           yq -i '.frontend.image.tag = env(IMAGE_TAG)' environments/minikube/frontend-values.yaml
           yq -i '.global.releaseTag = env(RELEASE_TAG)' releases/minikube.yaml
 
@@ -80,7 +80,7 @@ jobs:
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
 
-          git add charts/raju-stack/charts/frontend/values.yaml
+          git add charts/frontend/values.yaml
           git add environments/minikube/frontend-values.yaml
           git add releases/minikube.yaml
 
