@@ -20,13 +20,14 @@ env:
 
 jobs:
   frontend:
+    name: Build, Push and Update GitOps
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout Frontend Repository
         uses: actions/checkout@v4
 
-      - name: Generate Image Tag
+      - name: Generate Image and Release Tags
         run: |
           echo "IMAGE_TAG=v1.0.${{ github.run_number }}" >> $GITHUB_ENV
           echo "RELEASE_TAG=v26.100.${{ github.run_number }}" >> $GITHUB_ENV
@@ -62,16 +63,21 @@ jobs:
       - name: Install yq
         run: |
           sudo wget -qO /usr/local/bin/yq \
-          https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+            https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
           sudo chmod +x /usr/local/bin/yq
 
       - name: Update Frontend Helm Values
         run: |
           cd gitops
 
-          yq -i '.image.tag = env(IMAGE_TAG)' charts/frontend/values.yaml
-          yq -i '.frontend.image.tag = env(IMAGE_TAG)' environments/minikube/frontend-values.yaml
-          yq -i '.global.releaseTag = env(RELEASE_TAG)' releases/minikube.yaml
+          # Frontend chart values
+          yq -i '.image.tag = strenv(IMAGE_TAG)' charts/frontend/values.yaml
+
+          # Environment override values
+          yq -i '.image.tag = strenv(IMAGE_TAG)' environments/minikube/frontend-values.yaml
+
+          # Umbrella release tag
+          yq -i '.global.releaseTag = strenv(RELEASE_TAG)' releases/minikube.yaml
 
       - name: Commit GitOps Changes
         run: |
@@ -85,7 +91,7 @@ jobs:
           git add releases/minikube.yaml
 
           if git diff --cached --quiet; then
-            echo "Nothing to commit."
+            echo "No GitOps changes."
           else
             git commit -m "release(frontend): ${IMAGE_TAG} (${RELEASE_TAG})"
             git push origin RTR-postgres
@@ -93,5 +99,5 @@ jobs:
 
       - name: Deployment Summary
         run: |
-          echo "Frontend Image : $IMAGE_NAME:$IMAGE_TAG"
-          echo "Release Tag    : $RELEASE_TAG"
+          echo "Docker Image : 2024dock/cdc-frontend:${IMAGE_TAG}"
+          echo "Release Tag  : ${RELEASE_TAG}"
