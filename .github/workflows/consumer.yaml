@@ -1,0 +1,97 @@
+name: Consumer CI/CD
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "consumer/**"
+      - ".github/workflows/consumer-ci.yaml"
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  IMAGE_NAME: 2024dock/cdc-consumer
+  GITOPS_REPO: 2024dock/devops-project
+  GITOPS_BRANCH: RTR-postgres
+
+jobs:
+  consumer:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Consumer Repository
+        uses: actions/checkout@v4
+
+      - name: Generate Image Tag
+        run: |
+          echo "IMAGE_TAG=v1.0.${{ github.run_number }}" >> $GITHUB_ENV
+          echo "RELEASE_TAG=v26.100.${{ github.run_number }}" >> $GITHUB_ENV
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and Push Consumer Image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./consumer
+          push: true
+          tags: |
+            2024dock/cdc-consumer:${{ env.IMAGE_TAG }}
+            2024dock/cdc-consumer:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Checkout GitOps Repository
+        uses: actions/checkout@v4
+        with:
+          repository: 2024dock/devops-project
+          ref: RTR-postgres
+          token: ${{ secrets.GITOPS_REPO_TOKEN }}
+          path: gitops
+
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq \
+          https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Update Consumer Helm Values
+        run: |
+          cd gitops
+
+          yq -i '.image.tag = env(IMAGE_TAG)' charts/raju-stack/charts/consumer/values.yaml
+          yq -i '.consumer.image.tag = env(IMAGE_TAG)' environments/minikube/consumer-values.yaml
+          yq -i '.global.releaseTag = env(RELEASE_TAG)' releases/minikube.yaml
+
+      - name: Commit GitOps Changes
+        run: |
+          cd gitops
+
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+
+          git add charts/raju-stack/charts/consumer/values.yaml
+          git add environments/minikube/consumer-values.yaml
+          git add releases/minikube.yaml
+
+          if git diff --cached --quiet; then
+            echo "Nothing to commit."
+          else
+            git commit -m "release(consumer): ${IMAGE_TAG} (${RELEASE_TAG})"
+            git push origin RTR-postgres
+          fi
+
+      - name: Deployment Summary
+        run: |
+          echo "Consumer Image : $IMAGE_NAME:$IMAGE_TAG"
+          echo "Release Tag    : $RELEASE_TAG"
