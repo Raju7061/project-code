@@ -120,7 +120,7 @@ permissions:
 env:
   IMAGE_NAME: 2024dock/cdc-backend
   GITOPS_REPO: Raju7061/devops-project
-  GITOPS_BRANCH: RTR-postgres
+  GITOPS_BRANCH: new-release
 
 jobs:
   backend:
@@ -206,7 +206,7 @@ jobs:
 
           # Backend chart values
           yq -i '.image.tag = strenv(IMAGE_TAG)' \
-            charts/raju-stack/charts/backend/values.yaml
+            devops-project/charts/backend/values.yaml
 
           # Environment override
           yq -i '.image.tag = strenv(IMAGE_TAG)' \
@@ -226,7 +226,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add charts/raju-stack/charts/backend/values.yaml
+          git add devops-project/charts/backend/values.yaml
           git add environments/minikube/backend-values.yaml
           git add releases/minikube.yaml
 
