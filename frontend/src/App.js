@@ -151,7 +151,7 @@ export default function App() {
                 </div>
                 <button
                   onClick={() => deleteTodo(todo.id)}
-                  style={{ background: '#fee2e2', color: '#dc2626', border: 'none', padding: '6px 10px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}
+                  style={{ background: '#fee2e2', color: '#dc2626', border: 'none', padding: '10px 10px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}
                 >
                   Delete
                 </button>
