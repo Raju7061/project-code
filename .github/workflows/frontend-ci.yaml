@@ -494,7 +494,7 @@ jobs:
           cd gitops
 
           # Frontend chart image tag
-          yq -i '.image.tag = strenv(IMAGE_TAG)' devops-project/charts/frontend/values.yaml
+          yq -i '.image.tag = strenv(IMAGE_TAG)' charts/frontend/values.yaml
 
           # Minikube override image tag
           yq -i '.image.tag = strenv(IMAGE_TAG)' environments/minikube/frontend-values.yaml
@@ -512,7 +512,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add devops-project/charts/frontend/values.yaml
+          git add charts/frontend/values.yaml
           git add environments/minikube/frontend-values.yaml
           git add releases/minikube.yaml
 
