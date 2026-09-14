@@ -103,7 +103,7 @@ async function run() {
           }
         }
       } catch (err) {
-        console.error('Error processing Kafka event:', err.message);
+        console.error('Error processing Kafka  at event:', err.message);
       }
     }
   });
