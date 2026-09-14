@@ -184,7 +184,7 @@ jobs:
         with:
           repository: ${{ env.GITOPS_REPO }}
           ref: ${{ env.GITOPS_BRANCH }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITOPS_REPO_TOKEN }}
           path: gitops
 
       # ------------------------------------------------------------
