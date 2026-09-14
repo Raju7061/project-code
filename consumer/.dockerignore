@@ -1,0 +1,26 @@
+# =============================================================================
+# Consumer Docker Ignore
+# =============================================================================
+
+node_modules
+
+.env
+.env.*
+!.env.example
+
+.git
+.gitignore
+
+coverage
+*.log
+
+.vscode
+.idea
+
+.DS_Store
+Thumbs.db
+
+tmp
+.cache
+
+README.md

@@ -1,0 +1,42 @@
+# =============================================================================
+# Backend Docker Ignore
+# =============================================================================
+
+# Node dependencies
+node_modules
+npm-debug.log*
+yarn.lock
+pnpm-lock.yaml
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Git
+.git
+.gitignore
+
+# Logs
+logs
+*.log
+
+# Tests
+coverage
+.nyc_output
+
+# IDE
+.vscode
+.idea
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+tmp
+temp
+.cache
+
+# Documentation
+README.md

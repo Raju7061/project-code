@@ -1,3 +1,107 @@
+# this below ci create image linux/amd64 image
+# name: Backend CI/CD
+
+# on:
+#   push:
+#     branches:
+#       - main
+#     paths:
+#       - "backend/**"
+#       - ".github/workflows/backend-ci.yaml"
+
+#   workflow_dispatch:
+
+# permissions:
+#   contents: read
+
+# env:
+#   IMAGE_NAME: 2024dock/cdc-backend
+#   GITOPS_REPO: Raju7061/devops-project
+#   GITOPS_BRANCH: RTR-postgres
+
+# jobs:
+#   backend:
+#     runs-on: ubuntu-latest
+
+#     steps:
+#       - name: Checkout Backend Repository
+#         uses: actions/checkout@v4
+
+#       - name: Generate Image Tag
+#         run: |
+#           echo "IMAGE_TAG=v1.0.${{ github.run_number }}" >> $GITHUB_ENV
+#           echo "RELEASE_TAG=v26.100.${{ github.run_number }}" >> $GITHUB_ENV
+
+#       - name: Set up Docker Buildx
+#         uses: docker/setup-buildx-action@v3
+
+#       - name: Login to Docker Hub
+#         uses: docker/login-action@v3
+#         with:
+#           username: ${{ secrets.DOCKER_USERNAME }}
+#           password: ${{ secrets.DOCKER_PASSWORD }}
+
+#       - name: Build and Push Backend Image
+#         uses: docker/build-push-action@v6
+#         with:
+#           context: ./backend
+#           push: true
+#           tags: |
+#             2024dock/cdc-backend:${{ env.IMAGE_TAG }}
+#             2024dock/cdc-backend:latest
+#           cache-from: type=gha
+#           cache-to: type=gha,mode=max
+
+#       - name: Checkout GitOps Repository
+#         uses: actions/checkout@v4
+#         with:
+#           repository: Raju7061/devops-project
+#           ref: RTR-postgres
+#           token: ${{ secrets.GITOPS_REPO_TOKEN }}
+#           path: gitops
+
+#       - name: Install yq
+#         run: |
+#           sudo wget -qO /usr/local/bin/yq \
+#           https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+#           sudo chmod +x /usr/local/bin/yq
+
+#       - name: Update Backend Helm Values
+#         run: |
+#           cd gitops
+
+#           yq -i '.image.tag = env(IMAGE_TAG)' charts/backend/values.yaml
+#           yq -i '.backend.image.tag = env(IMAGE_TAG)' environments/minikube/backend-values.yaml
+#           yq -i '.global.releaseTag = env(RELEASE_TAG)' releases/minikube.yaml
+
+#       - name: Commit GitOps Changes
+#         run: |
+#           cd gitops
+
+#           git config user.name "github-actions"
+#           git config user.email "github-actions@github.com"
+
+#           git add charts/backend/values.yaml
+#           git add environments/minikube/backend-values.yaml
+#           git add releases/minikube.yaml
+
+#           if git diff --cached --quiet; then
+#             echo "Nothing to commit."
+#           else
+#             git commit -m "release(backend): ${IMAGE_TAG} (${RELEASE_TAG})"
+#             git push origin RTR-postgres
+#           fi
+
+#       - name: Deployment Summary
+#         run: |
+#           echo "Backend Image : $IMAGE_NAME:$IMAGE_TAG"
+#           echo "Release Tag   : $RELEASE_TAG"
+
+
+# for linux/arm64 image
+
+
+
 name: Backend CI/CD
 
 on:
@@ -20,30 +124,51 @@ env:
 
 jobs:
   backend:
+    name: Build Backend Image and Update GitOps
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Backend Repository
+      # ------------------------------------------------------------
+      # Checkout application repository
+      # ------------------------------------------------------------
+      - name: Checkout Project Code
         uses: actions/checkout@v4
 
-      - name: Generate Image Tag
+      # ------------------------------------------------------------
+      # Generate image and release tags
+      # Example:
+      # Image Tag   : v1.0.4
+      # Release Tag : v26.100.4
+      # ------------------------------------------------------------
+      - name: Generate Tags
         run: |
-          echo "IMAGE_TAG=v1.0.${{ github.run_number }}" >> $GITHUB_ENV
-          echo "RELEASE_TAG=v26.100.${{ github.run_number }}" >> $GITHUB_ENV
+          echo "IMAGE_TAG=v1.0.${GITHUB_RUN_NUMBER}" >> $GITHUB_ENV
+          echo "RELEASE_TAG=v26.100.${GITHUB_RUN_NUMBER}" >> $GITHUB_ENV
 
+      # ------------------------------------------------------------
+      # Docker Buildx
+      # ------------------------------------------------------------
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      # ------------------------------------------------------------
+      # Login Docker Hub
+      # ------------------------------------------------------------
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and Push Backend Image
+      # ------------------------------------------------------------
+      # Build ARM64 image only
+      # ------------------------------------------------------------
+      - name: Build and Push Backend Image (linux/arm64)
         uses: docker/build-push-action@v6
         with:
           context: ./backend
+          file: ./backend/Dockerfile
+          platforms: linux/arm64
           push: true
           tags: |
             2024dock/cdc-backend:${{ env.IMAGE_TAG }}
@@ -51,47 +176,74 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Checkout GitOps Repository
+      # ------------------------------------------------------------
+      # Checkout GitOps repository
+      # ------------------------------------------------------------
+      - name: Checkout DevOps Repository
         uses: actions/checkout@v4
         with:
-          repository: Raju7061/devops-project
-          ref: RTR-postgres
-          token: ${{ secrets.GITOPS_REPO_TOKEN }}
+          repository: ${{ env.GITOPS_REPO }}
+          ref: ${{ env.GITOPS_BRANCH }}
+          token: ${{ secrets.PAT_TOKEN }}
           path: gitops
 
+      # ------------------------------------------------------------
+      # Install yq
+      # ------------------------------------------------------------
       - name: Install yq
         run: |
           sudo wget -qO /usr/local/bin/yq \
-          https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+            https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
           sudo chmod +x /usr/local/bin/yq
+          yq --version
 
-      - name: Update Backend Helm Values
+      # ------------------------------------------------------------
+      # Update Helm values in GitOps repo
+      # ------------------------------------------------------------
+      - name: Update Backend Image Tag in Helm Values
         run: |
           cd gitops
 
-          yq -i '.image.tag = env(IMAGE_TAG)' charts/backend/values.yaml
-          yq -i '.backend.image.tag = env(IMAGE_TAG)' environments/minikube/backend-values.yaml
-          yq -i '.global.releaseTag = env(RELEASE_TAG)' releases/minikube.yaml
+          # Backend chart values
+          yq -i '.image.tag = strenv(IMAGE_TAG)' \
+            charts/raju-stack/charts/backend/values.yaml
 
+          # Environment override
+          yq -i '.image.tag = strenv(IMAGE_TAG)' \
+            environments/minikube/backend-values.yaml
+
+          # Umbrella release tag
+          yq -i '.values.global.releaseTag = strenv(RELEASE_TAG)' \
+            releases/minikube.yaml
+
+      # ------------------------------------------------------------
+      # Commit and Push
+      # ------------------------------------------------------------
       - name: Commit GitOps Changes
         run: |
           cd gitops
 
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add charts/backend/values.yaml
+          git add charts/raju-stack/charts/backend/values.yaml
           git add environments/minikube/backend-values.yaml
           git add releases/minikube.yaml
 
           if git diff --cached --quiet; then
-            echo "Nothing to commit."
-          else
-            git commit -m "release(backend): ${IMAGE_TAG} (${RELEASE_TAG})"
-            git push origin RTR-postgres
+            echo "No GitOps changes detected."
+            exit 0
           fi
 
+          git commit -m "release(backend): ${IMAGE_TAG} -> ${RELEASE_TAG}"
+          git push origin ${GITOPS_BRANCH}
+
+      # ------------------------------------------------------------
+      # Summary
+      # ------------------------------------------------------------
       - name: Deployment Summary
         run: |
-          echo "Backend Image : $IMAGE_NAME:$IMAGE_TAG"
-          echo "Release Tag   : $RELEASE_TAG"
+          echo "Backend Docker Image : ${IMAGE_NAME}:${IMAGE_TAG}"
+          echo "Umbrella Release Tag : ${RELEASE_TAG}"
+          echo "GitOps Repository     : ${GITOPS_REPO}"
+          echo "GitOps Branch         : ${GITOPS_BRANCH}"

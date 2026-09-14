@@ -1,0 +1,27 @@
+# =============================================================================
+# Frontend Docker Ignore
+# =============================================================================
+
+node_modules
+build
+
+.env
+.env.*
+!.env.example
+
+.git
+.gitignore
+
+coverage
+*.log
+
+.vscode
+.idea
+
+.DS_Store
+Thumbs.db
+
+tmp
+.cache
+
+README.md

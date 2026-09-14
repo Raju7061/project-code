@@ -1,3 +1,4 @@
+require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const { Pool } = require("pg");
@@ -9,24 +10,22 @@ app.use(express.json());
 
 // PostgreSQL Connection
 const pgPool = new Pool({
-  user: process.env.POSTGRES_USER,
   host: process.env.POSTGRES_HOST,
+  port: Number(process.env.POSTGRES_PORT),
   database: process.env.POSTGRES_DB,
+  user: process.env.POSTGRES_USER,
   password: process.env.POSTGRES_PASSWORD,
-  port: Number(process.env.POSTGRES_PORT) || 5432,
-  ssl: false,              // IMPORTANT: Disable SSL in Kubernetes
 });
 
 // Check DB connection on startup
 (async () => {
   try {
-    const result = await pgPool.query("SELECT NOW()");
-    console.log("✅ Connected to PostgreSQL:", result.rows[0].now);
+    await pgPool.query("SELECT NOW()");
+    console.log("✅ Connected to PostgreSQL");
   } catch (err) {
     console.error("❌ PostgreSQL connection failed:", err.message);
   }
 })();
-
 // ------------------------------------------------------------------
 // Health
 // ------------------------------------------------------------------
