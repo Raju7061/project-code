@@ -1,3 +1,109 @@
+# # name: Frontend CI/CD
+
+# # on:
+# #   push:
+# #     branches:
+# #       - main
+# #     paths:
+# #       - "frontend/**"
+# #       - ".github/workflows/frontend-ci.yaml"
+
+# #   workflow_dispatch:
+
+# # permissions:
+# #   contents: read
+
+# # env:
+# #   IMAGE_NAME: 2024dock/cdc-frontend
+# #   GITOPS_REPO: Raju7061/devops-project
+# #   GITOPS_BRANCH: RTR-postgres
+
+# # jobs:
+# #   frontend:
+# #     name: Build, Push and Update GitOps
+# #     runs-on: ubuntu-latest
+
+# #     steps:
+# #       - name: Checkout Frontend Repository
+# #         uses: actions/checkout@v4
+
+# #       - name: Generate Image and Release Tags
+# #         run: |
+# #           echo "IMAGE_TAG=v1.0.${{ github.run_number }}" >> $GITHUB_ENV
+# #           echo "RELEASE_TAG=v26.100.${{ github.run_number }}" >> $GITHUB_ENV
+
+# #       - name: Set up Docker Buildx
+# #         uses: docker/setup-buildx-action@v3
+
+# #       - name: Login to Docker Hub
+# #         uses: docker/login-action@v3
+# #         with:
+# #           username: ${{ secrets.DOCKER_USERNAME }}
+# #           password: ${{ secrets.DOCKER_PASSWORD }}
+
+# #       - name: Build and Push Frontend Image
+# #         uses: docker/build-push-action@v6
+# #         with:
+# #           context: ./frontend
+# #           push: true
+# #           tags: |
+# #             2024dock/cdc-frontend:${{ env.IMAGE_TAG }}
+# #             2024dock/cdc-frontend:latest
+# #           cache-from: type=gha
+# #           cache-to: type=gha,mode=max
+
+# #       - name: Checkout GitOps Repository
+# #         uses: actions/checkout@v4
+# #         with:
+# #           repository: Raju7061/devops-project
+# #           ref: RTR-postgres
+# #           token: ${{ secrets.GITOPS_REPO_TOKEN }}
+# #           path: gitops
+
+# #       - name: Install yq
+# #         run: |
+# #           sudo wget -qO /usr/local/bin/yq \
+# #             https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+# #           sudo chmod +x /usr/local/bin/yq
+
+# #       - name: Update Frontend Helm Values
+# #         run: |
+# #           cd gitops
+
+# #           # Frontend chart values
+# #           yq -i '.image.tag = strenv(IMAGE_TAG)' charts/frontend/values.yaml
+
+# #           # Environment override values
+# #           yq -i '.image.tag = strenv(IMAGE_TAG)' environments/minikube/frontend-values.yaml
+
+# #           # Umbrella release tag
+# #           yq -i '.global.releaseTag = strenv(RELEASE_TAG)' releases/minikube.yaml
+
+# #       - name: Commit GitOps Changes
+# #         run: |
+# #           cd gitops
+
+# #           git config user.name "github-actions"
+# #           git config user.email "github-actions@github.com"
+
+# #           git add charts/frontend/values.yaml
+# #           git add environments/minikube/frontend-values.yaml
+# #           git add releases/minikube.yaml
+
+# #           if git diff --cached --quiet; then
+# #             echo "No GitOps changes."
+# #           else
+# #             git commit -m "release(frontend): ${IMAGE_TAG} (${RELEASE_TAG})"
+# #             git push origin RTR-postgres
+# #           fi
+
+# #       - name: Deployment Summary
+# #         run: |
+# #           echo "Docker Image : 2024dock/cdc-frontend:${IMAGE_TAG}"
+# #           echo "Release Tag  : ${RELEASE_TAG}"
+
+
+
 # name: Frontend CI/CD
 
 # on:
@@ -20,31 +126,51 @@
 
 # jobs:
 #   frontend:
-#     name: Build, Push and Update GitOps
+#     name: Build Frontend Image and Update GitOps
 #     runs-on: ubuntu-latest
 
 #     steps:
-#       - name: Checkout Frontend Repository
+#       # ------------------------------------------------------------
+#       # Checkout Application Repository
+#       # ------------------------------------------------------------
+#       - name: Checkout Project Code
 #         uses: actions/checkout@v4
 
-#       - name: Generate Image and Release Tags
+#       # ------------------------------------------------------------
+#       # Generate Image Tag and Umbrella Release Tag
+#       # Example:
+#       # IMAGE_TAG   = v1.0.5
+#       # RELEASE_TAG = v26.100.5
+#       # ------------------------------------------------------------
+#       - name: Generate Tags
 #         run: |
-#           echo "IMAGE_TAG=v1.0.${{ github.run_number }}" >> $GITHUB_ENV
-#           echo "RELEASE_TAG=v26.100.${{ github.run_number }}" >> $GITHUB_ENV
+#           echo "IMAGE_TAG=v1.0.${GITHUB_RUN_NUMBER}" >> $GITHUB_ENV
+#           echo "RELEASE_TAG=v26.100.${GITHUB_RUN_NUMBER}" >> $GITHUB_ENV
 
+#       # ------------------------------------------------------------
+#       # Docker Buildx
+#       # ------------------------------------------------------------
 #       - name: Set up Docker Buildx
 #         uses: docker/setup-buildx-action@v3
 
+#       # ------------------------------------------------------------
+#       # Login Docker Hub
+#       # ------------------------------------------------------------
 #       - name: Login to Docker Hub
 #         uses: docker/login-action@v3
 #         with:
 #           username: ${{ secrets.DOCKER_USERNAME }}
 #           password: ${{ secrets.DOCKER_PASSWORD }}
 
-#       - name: Build and Push Frontend Image
+#       # ------------------------------------------------------------
+#       # Build & Push ARM64 Docker Image
+#       # ------------------------------------------------------------
+#       - name: Build and Push Frontend Image (linux/arm64)
 #         uses: docker/build-push-action@v6
 #         with:
 #           context: ./frontend
+#           file: ./frontend/Dockerfile
+#           platforms: linux/arm64
 #           push: true
 #           tags: |
 #             2024dock/cdc-frontend:${{ env.IMAGE_TAG }}
@@ -52,55 +178,77 @@
 #           cache-from: type=gha
 #           cache-to: type=gha,mode=max
 
-#       - name: Checkout GitOps Repository
+#       # ------------------------------------------------------------
+#       # Checkout GitOps Repository
+#       # ------------------------------------------------------------
+#       - name: Checkout DevOps Repository
 #         uses: actions/checkout@v4
 #         with:
-#           repository: Raju7061/devops-project
-#           ref: RTR-postgres
-#           token: ${{ secrets.GITOPS_REPO_TOKEN }}
+#           repository: ${{ env.GITOPS_REPO }}
+#           ref: ${{ env.GITOPS_BRANCH }}
+#           token: ${{ secrets.PAT_TOKEN }}
 #           path: gitops
 
+#       # ------------------------------------------------------------
+#       # Install yq
+#       # ------------------------------------------------------------
 #       - name: Install yq
 #         run: |
 #           sudo wget -qO /usr/local/bin/yq \
 #             https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
 #           sudo chmod +x /usr/local/bin/yq
+#           yq --version
 
-#       - name: Update Frontend Helm Values
+#       # ------------------------------------------------------------
+#       # Update Helm Values in GitOps Repository
+#       # ------------------------------------------------------------
+#       - name: Update Frontend Image Tag in Helm Values
 #         run: |
 #           cd gitops
 
 #           # Frontend chart values
-#           yq -i '.image.tag = strenv(IMAGE_TAG)' charts/frontend/values.yaml
+#           yq -i '.image.tag = strenv(IMAGE_TAG)' \
+#             charts/raju-stack/charts/frontend/values.yaml
 
-#           # Environment override values
-#           yq -i '.image.tag = strenv(IMAGE_TAG)' environments/minikube/frontend-values.yaml
+#           # Minikube environment values
+#           yq -i '.image.tag = strenv(IMAGE_TAG)' \
+#             environments/minikube/frontend-values.yaml
 
 #           # Umbrella release tag
-#           yq -i '.global.releaseTag = strenv(RELEASE_TAG)' releases/minikube.yaml
+#           yq -i '.spec.values.global.releaseTag = strenv(RELEASE_TAG)' \
+#             releases/minikube.yaml
 
+#       # ------------------------------------------------------------
+#       # Commit and Push GitOps Changes
+#       # ------------------------------------------------------------
 #       - name: Commit GitOps Changes
 #         run: |
 #           cd gitops
 
-#           git config user.name "github-actions"
-#           git config user.email "github-actions@github.com"
+#           git config user.name "github-actions[bot]"
+#           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-#           git add charts/frontend/values.yaml
+#           git add charts/raju-stack/charts/frontend/values.yaml
 #           git add environments/minikube/frontend-values.yaml
 #           git add releases/minikube.yaml
 
 #           if git diff --cached --quiet; then
-#             echo "No GitOps changes."
-#           else
-#             git commit -m "release(frontend): ${IMAGE_TAG} (${RELEASE_TAG})"
-#             git push origin RTR-postgres
+#             echo "No GitOps changes detected."
+#             exit 0
 #           fi
 
+#           git commit -m "release(frontend): ${IMAGE_TAG} -> ${RELEASE_TAG}"
+#           git push origin ${GITOPS_BRANCH}
+
+#       # ------------------------------------------------------------
+#       # Deployment Summary
+#       # ------------------------------------------------------------
 #       - name: Deployment Summary
 #         run: |
-#           echo "Docker Image : 2024dock/cdc-frontend:${IMAGE_TAG}"
-#           echo "Release Tag  : ${RELEASE_TAG}"
+#           echo "Frontend Docker Image : ${IMAGE_NAME}:${IMAGE_TAG}"
+#           echo "Umbrella Release Tag  : ${RELEASE_TAG}"
+#           echo "GitOps Repository      : ${GITOPS_REPO}"
+#           echo "GitOps Branch          : ${GITOPS_BRANCH}"
 
 
 
@@ -117,7 +265,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 env:
   IMAGE_NAME: 2024dock/cdc-frontend
@@ -133,16 +281,13 @@ jobs:
       # ------------------------------------------------------------
       # Checkout Application Repository
       # ------------------------------------------------------------
-      - name: Checkout Project Code
+      - name: Checkout Project Repository
         uses: actions/checkout@v4
 
       # ------------------------------------------------------------
-      # Generate Image Tag and Umbrella Release Tag
-      # Example:
-      # IMAGE_TAG   = v1.0.5
-      # RELEASE_TAG = v26.100.5
+      # Generate Image & Release Tags
       # ------------------------------------------------------------
-      - name: Generate Tags
+      - name: Generate Image Tag
         run: |
           echo "IMAGE_TAG=v1.0.${GITHUB_RUN_NUMBER}" >> $GITHUB_ENV
           echo "RELEASE_TAG=v26.100.${GITHUB_RUN_NUMBER}" >> $GITHUB_ENV
@@ -163,7 +308,7 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       # ------------------------------------------------------------
-      # Build & Push ARM64 Docker Image
+      # Build ARM64 Image
       # ------------------------------------------------------------
       - name: Build and Push Frontend Image (linux/arm64)
         uses: docker/build-push-action@v6
@@ -181,12 +326,12 @@ jobs:
       # ------------------------------------------------------------
       # Checkout GitOps Repository
       # ------------------------------------------------------------
-      - name: Checkout DevOps Repository
+      - name: Checkout GitOps Repository
         uses: actions/checkout@v4
         with:
           repository: ${{ env.GITOPS_REPO }}
           ref: ${{ env.GITOPS_BRANCH }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITOPS_REPO_TOKEN }}
           path: gitops
 
       # ------------------------------------------------------------
@@ -200,26 +345,20 @@ jobs:
           yq --version
 
       # ------------------------------------------------------------
-      # Update Helm Values in GitOps Repository
+      # Update GitOps Helm Values
       # ------------------------------------------------------------
-      - name: Update Frontend Image Tag in Helm Values
+      - name: Update Frontend Helm Values
         run: |
           cd gitops
 
-          # Frontend chart values
-          yq -i '.image.tag = strenv(IMAGE_TAG)' \
-            charts/raju-stack/charts/frontend/values.yaml
+          yq -i '.image.tag = strenv(IMAGE_TAG)' devops-project/charts/frontend/values.yaml
 
-          # Minikube environment values
-          yq -i '.image.tag = strenv(IMAGE_TAG)' \
-            environments/minikube/frontend-values.yaml
+          yq -i '.image.tag = strenv(IMAGE_TAG)' environments/minikube/frontend-values.yaml
 
-          # Umbrella release tag
-          yq -i '.spec.values.global.releaseTag = strenv(RELEASE_TAG)' \
-            releases/minikube.yaml
+          yq -i '.spec.values.global.releaseTag = strenv(RELEASE_TAG)' releases/minikube.yaml
 
       # ------------------------------------------------------------
-      # Commit and Push GitOps Changes
+      # Commit & Push GitOps Changes
       # ------------------------------------------------------------
       - name: Commit GitOps Changes
         run: |
@@ -228,16 +367,16 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add charts/raju-stack/charts/frontend/values.yaml
+          git add devops-project/charts/frontend/values.yaml
           git add environments/minikube/frontend-values.yaml
           git add releases/minikube.yaml
 
           if git diff --cached --quiet; then
-            echo "No GitOps changes detected."
+            echo "No GitOps changes."
             exit 0
           fi
 
-          git commit -m "release(frontend): ${IMAGE_TAG} -> ${RELEASE_TAG}"
+          git commit -m "release(frontend): ${IMAGE_TAG} (${RELEASE_TAG})"
           git push origin ${GITOPS_BRANCH}
 
       # ------------------------------------------------------------
@@ -245,7 +384,6 @@ jobs:
       # ------------------------------------------------------------
       - name: Deployment Summary
         run: |
-          echo "Frontend Docker Image : ${IMAGE_NAME}:${IMAGE_TAG}"
-          echo "Umbrella Release Tag  : ${RELEASE_TAG}"
-          echo "GitOps Repository      : ${GITOPS_REPO}"
-          echo "GitOps Branch          : ${GITOPS_BRANCH}"
+          echo "Frontend Image : ${IMAGE_NAME}:${IMAGE_TAG}"
+          echo "Release Tag    : ${RELEASE_TAG}"
+          echo "GitOps Branch  : ${GITOPS_BRANCH}"
