@@ -94,7 +94,7 @@ export default function App() {
           type="submit"
           style={{ padding: '10px 16px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600' }}
         >
-          Add to PostgreSQL
+          ADD TASK IN TODO
         </button>
       </form>
 
