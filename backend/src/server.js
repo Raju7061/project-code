@@ -178,5 +178,5 @@ app.delete("/api/todos/:id", async (req, res) => {
 const PORT = process.env.PORT || 8080;
 
 app.listen(PORT, () => {
-  console.log(`🚀 Backend server running on a port ${PORT}`);
+  console.log(`🚀 Backend server running with port ${PORT}`);
 });
