@@ -67,7 +67,7 @@ export default function App() {
   return (
     <div style={{ maxWidth: 700, margin: '40px auto', padding: '24px', fontFamily: 'system-ui, -apple-system, sans-serif', border: '1px solid #e2e8f0', borderRadius: '10px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
       <div style={{ borderBottom: '1px solid #e2e8f0', paddingBottom: '16px', marginBottom: '20px' }}>
-        <h2 style={{ margin: '0 0 6px 0', color: '#0f172a' }}>Direct PostgreSQL To-Do App</h2>
+        <h2 style={{ margin: '0 0 6px 0', color: '#0f172a' }}>Welcome to todo app</h2>
         <p style={{ margin: 0, fontSize: '13px', color: statusMsg.includes('Error') ? '#dc2626' : '#16a34a' }}>
           <strong>DB Status:</strong> {statusMsg || 'Checking connection...'}
         </p>
