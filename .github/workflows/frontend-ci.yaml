@@ -522,7 +522,7 @@ jobs:
           fi
 
           git commit -m "release(frontend): ${IMAGE_TAG} (${RELEASE_TAG})"
-          git push origin RTR-postgres
+          git push origin ${GITOPS_BRANCH}
 
       # ------------------------------------------------------------
       # Deployment Summary
