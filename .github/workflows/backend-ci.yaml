@@ -270,7 +270,7 @@ permissions:
 env:
   IMAGE_NAME: 2024dock/cdc-backend
   GITOPS_REPO: Raju7061/devops-project
-  GITOPS_BRANCH: RTR-postgres
+  GITOPS_BRANCH: hotfix-03
 
 jobs:
   backend:
