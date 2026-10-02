@@ -2,8 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 
 //const API_BASE = '/api'; // for kubernetes setup
-//const API_BASE = "http://localhost:8080/api"; for local setup
-const API_BASE = process.env.REACT_APP_API_URL || "/api";
+const API_BASE = "http://localhost:8080/api"; 
+//const API_BASE = process.env.REACT_APP_API_URL || "/api";
 
 export default function App() {
   const [todos, setTodos] = useState([]);
@@ -63,6 +63,10 @@ export default function App() {
       alert('Error deleting record: ' + err.message);
     }
   };
+  function App()
+  {
+    
+  }
 
   return (
     <div style={{ maxWidth: 700, margin: '40px auto', padding: '24px', fontFamily: 'system-ui, -apple-system, sans-serif', border: '1px solid #e2e8f0', borderRadius: '10px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
