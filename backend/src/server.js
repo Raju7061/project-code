@@ -21,7 +21,7 @@ const pgPool = new Pool({
 (async () => {
   try {
     await pgPool.query("SELECT NOW()");
-    console.log("✅ Connected to PostgreSQL");
+    console.log("✅ Connected to a PostgreSQL");
   } catch (err) {
     console.error("❌ PostgreSQL connection failed:", err.message);
   }
