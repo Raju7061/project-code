@@ -18,6 +18,8 @@ const tools = [
   { id: 'docker', name: 'Docker Hub', group: 'Build', description: 'Browse published project images', icon: Container, href: 'https://hub.docker.com/u/2024dock' },
   { id: 'kafka', name: 'Kafka Console', group: 'Data', description: 'Inspect topics and consumer groups', icon: Radio, href: 'http://todo.kowl' },
   { id: 'kibana', name: 'Kibana', group: 'Data', description: 'Explore indexed events and logs', icon: Activity, href: 'http://todo.kibana' },
+  { id: 'grafana', name: 'Grafana', group: 'Monitoring', description: 'View dashboards and application metrics', icon: Gauge, href: 'http://grafana.local' },
+  { id: 'prometheus', name: 'Prometheus', group: 'Monitoring', description: 'Query metrics and inspect scrape targets', icon: Activity, href: 'http://prometheus.local' },
   { id: 'elasticsearch', name: 'Elasticsearch', group: 'Data', description: 'Check index and cluster health', icon: Search, command: 'curl http://raju-stack-elasticsearch:9200/_cat/indices?v' },
   { id: 'postgres', name: 'PostgreSQL', group: 'Data', description: 'Open a database shell in the pod', icon: HardDrive, command: 'kubectl exec -it -n raju raju-stack-postgres-0 -- psql -U todo_user -d tododb' },
   { id: 'todo', name: 'Todo workspace', group: 'Applications', description: 'Create and track application tasks', icon: Check, internal: true }
