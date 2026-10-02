@@ -107,7 +107,7 @@ on:
       - main
     paths:
       - "consumer/**"
-      - ".github/workflows/consumer-ci.yaml"
+      - ".github/workflows/consumer.yaml"
 
   workflow_dispatch:
 
@@ -117,7 +117,7 @@ permissions:
 env:
   IMAGE_NAME: 2024dock/cdc-consumer
   GITOPS_REPO: Raju7061/devops-project
-  GITOPS_BRANCH: RTR-postgres
+  GITOPS_BRANCH: main
 
 jobs:
   consumer:
@@ -181,7 +181,7 @@ jobs:
         with:
           repository: ${{ env.GITOPS_REPO }}
           ref: ${{ env.GITOPS_BRANCH }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITOPS_REPO_TOKEN }}
           path: gitops
 
       # ------------------------------------------------------------
@@ -201,17 +201,8 @@ jobs:
         run: |
           cd gitops
 
-          # Consumer chart values
-          yq -i '.image.tag = strenv(IMAGE_TAG)' \
-            charts/raju-stack/charts/consumer/values.yaml
-
-          # Minikube environment values
-          yq -i '.image.tag = strenv(IMAGE_TAG)' \
-            environments/minikube/consumer-values.yaml
-
-          # Umbrella HelmRelease tag
-          yq -i '.spec.values.global.releaseTag = strenv(RELEASE_TAG)' \
-            releases/minikube.yaml
+          yq -i '.consumer.image.tag = strenv(IMAGE_TAG)' minikube/consumer-values.yaml
+          yq -i '.global.releaseTag = strenv(RELEASE_TAG)' minikube/global-values.yaml
 
       # ------------------------------------------------------------
       # Commit and Push GitOps Changes
@@ -223,9 +214,8 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add charts/raju-stack/charts/consumer/values.yaml
-          git add environments/minikube/consumer-values.yaml
-          git add releases/minikube.yaml
+          git add minikube/consumer-values.yaml
+          git add minikube/global-values.yaml
 
           if git diff --cached --quiet; then
             echo "No GitOps changes detected."

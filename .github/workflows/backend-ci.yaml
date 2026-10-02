@@ -270,7 +270,7 @@ permissions:
 env:
   IMAGE_NAME: 2024dock/cdc-backend
   GITOPS_REPO: Raju7061/devops-project
-  GITOPS_BRANCH: hotfix-03
+  GITOPS_BRANCH: main
 
 jobs:
   backend:
@@ -353,19 +353,12 @@ jobs:
 
           echo "Updating backend image to ${IMAGE_TAG}"
 
-          # Backend chart values
-          yq -i '.image.tag = strenv(IMAGE_TAG)' charts/backend/values.yaml
-
-          # Minikube environment values
-          yq -i '.image.tag = strenv(IMAGE_TAG)' environments/minikube/backend-values.yaml
-
-          # Update umbrella release tag
-          yq -i '.values.global.releaseTag = strenv(RELEASE_TAG)' releases/minikube.yaml
+          yq -i '.backend.image.tag = strenv(IMAGE_TAG)' minikube/backend-values.yaml
+          yq -i '.global.releaseTag = strenv(RELEASE_TAG)' minikube/global-values.yaml
 
           echo "Updated files:"
-          grep "tag:" charts/backend/values.yaml
-          grep "tag:" environments/minikube/backend-values.yaml
-          grep "releaseTag:" releases/minikube.yaml
+          grep "tag:" minikube/backend-values.yaml
+          grep "releaseTag:" minikube/global-values.yaml
 
       # -------------------------------------------------------
       # Commit GitOps Changes
@@ -377,9 +370,8 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add charts/backend/values.yaml
-          git add environments/minikube/backend-values.yaml
-          git add releases/minikube.yaml
+          git add minikube/backend-values.yaml
+          git add minikube/global-values.yaml
 
           if git diff --cached --quiet; then
             echo "No GitOps changes to commit."
