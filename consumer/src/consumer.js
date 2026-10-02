@@ -3,7 +3,7 @@ const { Client } = require('@elastic/elasticsearch');
 
 const kafka = new Kafka({
   clientId: 'todo-sync-consumer',
-  brokers: [(process.env.KAFKA_BROKER || 'kafka:9092')],
+  brokers: [process.env.KAFKA_BOOTSTRAP_SERVERS || process.env.KAFKA_BROKER || 'kafka:9092'],
   retry: {
     initialRetryTime: 1000,
     retries: 20
