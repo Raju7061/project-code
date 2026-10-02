@@ -72,28 +72,12 @@ async function run() {
       if (!message.value) return;
       try {
         const raw = JSON.parse(message.value.toString());
-        const payload = raw.payload ? raw.payload : raw;
-        const op = payload.op;
-        const after = payload.after;
-        const before = payload.before;
+        const payload = raw.payload || raw;
+        const op = payload.op || raw.op;
+        const after = payload.after || payload;
+        const before = payload.before || payload;
 
-        if (op === 'c' || op === 'u' || op === 'r') {
-          if (after && after.id) {
-            await esClient.index({
-              index: 'todos',
-              id: after.id.toString(),
-              document: {
-                id: after.id,
-                title: after.title,
-                description: after.description,
-                completed: after.completed,
-                created_at: after.created_at,
-                updated_at: after.updated_at
-              }
-            });
-            console.log(`[CDC Sync] Upserted Todo ID: ${after.id} (op: ${op})`);
-          }
-        } else if (op === 'd') {
+        if (op === 'd' || payload.__deleted === true || payload.__deleted === 'true') {
           if (before && before.id) {
             await esClient.delete({
               index: 'todos',
@@ -101,6 +85,20 @@ async function run() {
             }).catch(() => {});
             console.log(`[CDC Sync] Deleted Todo ID: ${before.id}`);
           }
+        } else if (after && after.id) {
+          await esClient.index({
+            index: 'todos',
+            id: after.id.toString(),
+            document: {
+              id: after.id,
+              title: after.title,
+              description: after.description,
+              completed: after.completed,
+              created_at: after.created_at,
+              updated_at: after.updated_at
+            }
+          });
+          console.log(`[CDC Sync] Upserted Todo ID: ${after.id} (op: ${op || 'unwrapped'})`);
         }
       } catch (err) {
         console.error('Error processing Kafka  at event:', err.message);
