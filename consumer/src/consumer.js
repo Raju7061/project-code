@@ -37,7 +37,7 @@ async function initElasticsearch() {
             }
           }
         });
-        console.log('Elasticsearch index "todos" created successfully.');
+        console.log('Elasticsearch index "todos" createda  successfully.');
       }
       break;
     } catch (e) {
