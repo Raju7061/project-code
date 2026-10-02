@@ -1,7 +1,7 @@
 # ==========================================================
 # Stage 1 - Build React App
 # ==========================================================
-FROM node:20-bookworm AS build
+FROM --platform=$BUILDPLATFORM node:20-bookworm AS build
 
 WORKDIR /app
 
