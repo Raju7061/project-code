@@ -102,7 +102,7 @@ export default function App() {
       <div style={{ marginBottom: '20px' }}>
         <input
           type="text"
-          placeholder="🔍 Live search database by title/desc..."
+          placeholder="🔍 Live search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           style={{ width: '100%', boxSizing: 'border-box', padding: '10px 12px', border: '1px solid #94a3b8', borderRadius: '6px', background: '#f8fafc' }}
