@@ -156,7 +156,7 @@ async function start() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
-  app.listen(port, '0.0.0.0', () => console.log(`Auth service listening on ${port}`));
+  app.listen(port, '0.0.0.0', () => console.log(`Auth service listening on a ${port}`));
 }
 
 start().catch((error) => {
