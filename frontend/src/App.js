@@ -92,7 +92,7 @@ function AuthScreen({ onAuthenticated }) {
           <p className="auth-switch">{isSignup ? 'Already have an account?' : 'New to Relay?'} <button type="button" onClick={() => { setMode(isSignup ? 'login' : 'signup'); setError(''); }}> {isSignup ? 'Sign in' : 'Create an account'}</button></p>
           <div className="auth-security"><LockKeyhole size={14} /> Passwords are hashed. Sessions expire automatically.</div>
         </div>
-        <div className="auth-copyright">RELAY OPS <span>•</span> LOCAL ENVIRONMENT</div>
+        <div className="auth-copyright">RELAY OPS <span>•</span> DevOps Environment</div>
       </section>
     </main>
   );
