@@ -1,12 +1,14 @@
-name: Release Frontend and Backend
+name: Production Release
 
 on:
   push:
     branches:
-      - RTR-0013
+      - main
     paths:
       - "frontend/**"
       - "backend/**"
+      - "auth-service/**"
+      - "consumer/**"
       - ".github/workflows/release.yaml"
 
 permissions:
@@ -17,17 +19,83 @@ env:
   GITOPS_BRANCH: main
 
 concurrency:
-  group: raju-stack-release
+  group: production-release
   cancel-in-progress: false
 
 jobs:
-  release:
-    name: Build and release frontend and backend together
+  changes:
+    name: Detect changed services
     runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.detect.outputs.matrix }}
     steps:
-      - name: Checkout application repository
+      - name: Checkout source history
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
+      - name: Checkout last released GitOps revision
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.GITOPS_REPO }}
+          ref: ${{ env.GITOPS_BRANCH }}
+          token: ${{ secrets.GITOPS_REPO_TOKEN }}
+          path: gitops
+          fetch-depth: 0
+
+      - name: Detect changed services
+        id: detect
+        env:
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          base="$BEFORE"
+          last_released_source="$(git -C gitops log origin/main \
+            --format='%B' \
+            --grep='^Source-Revision: ' \
+            -1 | sed -n 's/^Source-Revision: //p' | head -n 1)"
+          if [[ -n "$last_released_source" ]] && \
+            git cat-file -e "${last_released_source}^{commit}" 2>/dev/null; then
+            base="$last_released_source"
+          fi
+
+          if [[ "$base" =~ ^0+$ ]]; then
+            changed_files="$(git ls-tree -r --name-only "$AFTER")"
+          else
+            changed_files="$(git diff --name-only "$base" "$AFTER")"
+          fi
+
+          matrix='[]'
+          while IFS='|' read -r service directory image; do
+            if grep -q "^${directory}/" <<< "$changed_files"; then
+              item="$(jq -cn \
+                --arg service "$service" \
+                --arg context "$directory" \
+                --arg image "$image" \
+                '{service: $service, context: $context, image: $image}')"
+              matrix="$(jq -cn --argjson current "$matrix" --argjson item "$item" '$current + [$item]')"
+            fi
+          done <<'SERVICES'
+          frontend|frontend|2024dock/cdc-frontend
+          backend|backend|2024dock/cdc-backend
+          auth-service|auth-service|2024dock/cdc-auth
+          consumer|consumer|2024dock/cdc-consumer
+          SERVICES
+
+          echo "Changed service matrix: $matrix"
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
+  version:
+    name: Select release version
+    needs: changes
+    if: needs.changes.outputs.matrix != '[]'
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
       - name: Checkout GitOps repository
         uses: actions/checkout@v4
         with:
@@ -40,16 +108,33 @@ jobs:
       - name: Install yq
         run: |
           sudo wget -qO /usr/local/bin/yq \
-            https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+            https://github.com/mikefarah/yq/releases/download/v4.45.1/yq_linux_amd64
           sudo chmod +x /usr/local/bin/yq
           yq --version
 
-      - name: Generate next release tag
-        id: release
+      - name: Select next release version
+        id: version
+        env:
+          SOURCE_SHA: ${{ github.sha }}
         shell: bash
         run: |
           set -euo pipefail
           git -C gitops fetch --tags origin
+
+          prior_release_commit="$(git -C gitops log origin/main \
+            --fixed-strings \
+            --grep="Source-Revision: ${SOURCE_SHA}" \
+            -1 --format='%H')"
+          if [[ -n "$prior_release_commit" ]]; then
+            prior_release_subject="$(git -C gitops show -s --format='%s' "$prior_release_commit")"
+            if [[ "$prior_release_subject" =~ ^release:\ (v26\.100\.[0-9]+)$ ]]; then
+              echo "tag=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+              echo "Reusing release from prior attempt: ${BASH_REMATCH[1]}"
+              exit 0
+            fi
+            echo "Found a prior GitOps commit for this source revision with an invalid release subject." >&2
+            exit 1
+          fi
 
           chart_version="$(yq -r '.version' gitops/charts/raju-stack/Chart.yaml)"
           if [[ ! "$chart_version" =~ ^26\.100\.([0-9]+)$ ]]; then
@@ -58,13 +143,9 @@ jobs:
           fi
           latest_patch="${BASH_REMATCH[1]}"
 
-          latest_tag="$(git -C gitops tag --list 'v26.100.*' --sort=-version:refname | head -n 1)"
+          latest_tag="$(git -C gitops tag --list 'v26.100.*' | grep -E '^v26\.100\.[0-9]+$' | sort -V | tail -n 1 || true)"
           if [[ -n "$latest_tag" ]]; then
-            if [[ ! "$latest_tag" =~ ^v26\.100\.([0-9]+)$ ]]; then
-              echo "Unexpected release tag: $latest_tag" >&2
-              exit 1
-            fi
-            tag_patch="${BASH_REMATCH[1]}"
+            tag_patch="${latest_tag##*.}"
             if (( tag_patch > latest_patch )); then
               latest_patch="$tag_patch"
             fi
@@ -72,7 +153,22 @@ jobs:
 
           release_tag="v26.100.$((latest_patch + 1))"
           echo "tag=$release_tag" >> "$GITHUB_OUTPUT"
-          echo "Release tag: $release_tag"
+          echo "Selected release: $release_tag"
+
+  build:
+    name: Build ${{ matrix.service }}
+    needs:
+      - changes
+      - version
+    if: needs.changes.outputs.matrix != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.changes.outputs.matrix) }}
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -88,35 +184,51 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Build and push frontend image
+      - name: Build and push ${{ matrix.service }} image
         uses: docker/build-push-action@v6
         with:
-          context: ./frontend
-          file: ./frontend/Dockerfile
+          context: ./${{ matrix.context }}
+          file: ./${{ matrix.context }}/Dockerfile
           platforms: linux/arm64
           push: true
           tags: |
-            2024dock/cdc-frontend:${{ steps.release.outputs.tag }}
-            2024dock/cdc-frontend:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+            ${{ matrix.image }}:${{ needs.version.outputs.tag }}
+            ${{ matrix.image }}:latest
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
 
-      - name: Build and push backend image
-        uses: docker/build-push-action@v6
+  publish:
+    name: Update GitOps and publish release
+    needs:
+      - changes
+      - version
+      - build
+    if: needs.changes.outputs.matrix != '[]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout GitOps repository
+        uses: actions/checkout@v4
         with:
-          context: ./backend
-          file: ./backend/Dockerfile
-          platforms: linux/arm64
-          push: true
-          tags: |
-            2024dock/cdc-backend:${{ steps.release.outputs.tag }}
-            2024dock/cdc-backend:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          repository: ${{ env.GITOPS_REPO }}
+          ref: ${{ env.GITOPS_BRANCH }}
+          token: ${{ secrets.GITOPS_REPO_TOKEN }}
+          path: gitops
+          fetch-depth: 0
 
-      - name: Update GitOps release manifest
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq \
+            https://github.com/mikefarah/yq/releases/download/v4.45.1/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+          yq --version
+
+      - name: Update HelmRelease for changed services
+        id: gitops
         env:
-          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          CHANGED_SERVICES: ${{ needs.changes.outputs.matrix }}
+          RELEASE_TAG: ${{ needs.version.outputs.tag }}
+          SOURCE_SHA: ${{ github.sha }}
+        shell: bash
         run: |
           set -euo pipefail
           chart_version="${RELEASE_TAG#v}"
@@ -124,17 +236,42 @@ jobs:
 
           yq -i '.spec.values.global.releaseTag = strenv(RELEASE_TAG)' \
             gitops/minikube/release.yaml
-          yq -i '.spec.values.frontend.image.tag = strenv(RELEASE_TAG)' \
-            gitops/minikube/release.yaml
-          yq -i '.spec.values.backend.image.tag = strenv(RELEASE_TAG)' \
-            gitops/minikube/release.yaml
+
+          while IFS= read -r service; do
+            case "$service" in
+              frontend)
+                yq -i '.spec.values.frontend.image.tag = strenv(RELEASE_TAG)' \
+                  gitops/minikube/release.yaml
+                ;;
+              backend)
+                yq -i '.spec.values.backend.image.tag = strenv(RELEASE_TAG)' \
+                  gitops/minikube/release.yaml
+                ;;
+              auth-service)
+                yq -i '.spec.values."auth-service".image.tag = strenv(RELEASE_TAG)' \
+                  gitops/minikube/release.yaml
+                ;;
+              consumer)
+                yq -i '.spec.values.consumer.image.tag = strenv(RELEASE_TAG)' \
+                  gitops/minikube/release.yaml
+                ;;
+              *)
+                echo "Unexpected service: $service" >&2
+                exit 1
+                ;;
+            esac
+          done < <(jq -r '.[].service' <<< "$CHANGED_SERVICES")
+
           yq -i '.version = strenv(CHART_VERSION) | .appVersion = strenv(RELEASE_TAG)' \
             gitops/charts/raju-stack/Chart.yaml
-        shell: bash
+
+          services="$(jq -r '[.[].service] | join(", ")' <<< "$CHANGED_SERVICES")"
+          echo "services=$services" >> "$GITHUB_OUTPUT"
 
       - name: Commit and push GitOps release
         env:
-          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          RELEASE_TAG: ${{ needs.version.outputs.tag }}
+          SOURCE_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
           cd gitops
@@ -143,25 +280,36 @@ jobs:
 
           git add minikube/release.yaml charts/raju-stack/Chart.yaml
           git diff --cached --check
-          git commit -m "release: ${RELEASE_TAG}"
-          git push origin "HEAD:${GITOPS_BRANCH}"
+          if git diff --cached --quiet; then
+            echo "GitOps release commit already exists; nothing to push."
+          else
+            git commit \
+              -m "release: ${RELEASE_TAG}" \
+              -m "Source-Revision: ${SOURCE_SHA}"
+            git push origin "HEAD:${GITOPS_BRANCH}"
+          fi
 
-      - name: Create GitHub release in GitOps repository
+      - name: Create GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITOPS_REPO_TOKEN }}
-          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          RELEASE_TAG: ${{ needs.version.outputs.tag }}
+          SERVICES: ${{ steps.gitops.outputs.services }}
         run: |
-          gh release create "$RELEASE_TAG" \
-            --repo "$GITOPS_REPO" \
-            --target "$GITOPS_BRANCH" \
-            --title "$RELEASE_TAG" \
-            --notes "Frontend and backend images released together as ${RELEASE_TAG}. Flux deployment readiness is reported by the raju-stack HelmRelease."
+          if gh release view "$RELEASE_TAG" --repo "$GITOPS_REPO" >/dev/null 2>&1; then
+            echo "GitHub release ${RELEASE_TAG} already exists."
+          else
+            gh release create "$RELEASE_TAG" \
+              --repo "$GITOPS_REPO" \
+              --target "$GITOPS_BRANCH" \
+              --title "$RELEASE_TAG" \
+              --notes "Production release ${RELEASE_TAG}. Updated services: ${SERVICES}. Flux reconciles the HelmRelease and reports workload readiness."
+          fi
 
       - name: Release summary
         env:
-          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          RELEASE_TAG: ${{ needs.version.outputs.tag }}
+          SERVICES: ${{ steps.gitops.outputs.services }}
         run: |
           echo "Release: ${RELEASE_TAG}"
-          echo "Frontend image: 2024dock/cdc-frontend:${RELEASE_TAG}"
-          echo "Backend image: 2024dock/cdc-backend:${RELEASE_TAG}"
+          echo "Updated services: ${SERVICES}"
           echo "GitOps repository: ${GITOPS_REPO}, branch: ${GITOPS_BRANCH}"
