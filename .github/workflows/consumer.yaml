@@ -132,15 +132,11 @@ jobs:
         uses: actions/checkout@v4
 
       # ------------------------------------------------------------
-      # Generate Image Tag and Umbrella Release Tag
-      # Example:
-      # IMAGE_TAG   = v1.0.5
-      # RELEASE_TAG = v26.100.5
+      # Generate the consumer image tag.
       # ------------------------------------------------------------
       - name: Generate Tags
         run: |
           echo "IMAGE_TAG=v1.0.${GITHUB_RUN_NUMBER}" >> $GITHUB_ENV
-          echo "RELEASE_TAG=v26.100.${GITHUB_RUN_NUMBER}" >> $GITHUB_ENV
 
       # ------------------------------------------------------------
       # Docker Buildx
@@ -202,7 +198,6 @@ jobs:
           cd gitops
 
           yq -i '.consumer.image.tag = strenv(IMAGE_TAG)' minikube/consumer-values.yaml
-          yq -i '.global.releaseTag = strenv(RELEASE_TAG)' minikube/global-values.yaml
 
       # ------------------------------------------------------------
       # Commit and Push GitOps Changes
@@ -215,14 +210,13 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           git add minikube/consumer-values.yaml
-          git add minikube/global-values.yaml
 
           if git diff --cached --quiet; then
             echo "No GitOps changes detected."
             exit 0
           fi
 
-          git commit -m "release(consumer): ${IMAGE_TAG} -> ${RELEASE_TAG}"
+          git commit -m "release(consumer): ${IMAGE_TAG}"
           git push origin ${GITOPS_BRANCH}
 
       # ------------------------------------------------------------
@@ -231,6 +225,5 @@ jobs:
       - name: Deployment Summary
         run: |
           echo "Consumer Docker Image : ${IMAGE_NAME}:${IMAGE_TAG}"
-          echo "Umbrella Release Tag  : ${RELEASE_TAG}"
           echo "GitOps Repository      : ${GITOPS_REPO}"
           echo "GitOps Branch          : ${GITOPS_BRANCH}"

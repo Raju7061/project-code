@@ -28,7 +28,6 @@ jobs:
       - name: Generate Release Tags
         run: |
           echo "IMAGE_TAG=v1.0.${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
-          echo "RELEASE_TAG=v26.100.${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -75,17 +74,16 @@ jobs:
         run: |
           cd gitops
           yq -i '."auth-service".image.tag = strenv(IMAGE_TAG)' minikube/auth-values.yaml
-          yq -i '.global.releaseTag = strenv(RELEASE_TAG)' minikube/global-values.yaml
 
       - name: Commit and Push GitOps Changes
         run: |
           cd gitops
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add minikube/auth-values.yaml minikube/global-values.yaml
+          git add minikube/auth-values.yaml
           if git diff --cached --quiet; then
             echo "No GitOps changes detected."
             exit 0
           fi
-          git commit -m "release(auth): ${IMAGE_TAG} -> ${RELEASE_TAG}"
+          git commit -m "release(auth): ${IMAGE_TAG}"
           git push origin "$GITOPS_BRANCH"
