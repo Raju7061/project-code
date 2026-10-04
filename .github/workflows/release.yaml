@@ -1,0 +1,167 @@
+name: Release Frontend and Backend
+
+on:
+  push:
+    branches:
+      - RTR-0013
+    paths:
+      - "frontend/**"
+      - "backend/**"
+      - ".github/workflows/release.yaml"
+
+permissions:
+  contents: read
+
+env:
+  GITOPS_REPO: Raju7061/devops-project
+  GITOPS_BRANCH: main
+
+concurrency:
+  group: raju-stack-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build and release frontend and backend together
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout application repository
+        uses: actions/checkout@v4
+
+      - name: Checkout GitOps repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.GITOPS_REPO }}
+          ref: ${{ env.GITOPS_BRANCH }}
+          token: ${{ secrets.GITOPS_REPO_TOKEN }}
+          path: gitops
+          fetch-depth: 0
+
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq \
+            https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+          yq --version
+
+      - name: Generate next release tag
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          git -C gitops fetch --tags origin
+
+          chart_version="$(yq -r '.version' gitops/charts/raju-stack/Chart.yaml)"
+          if [[ ! "$chart_version" =~ ^26\.100\.([0-9]+)$ ]]; then
+            echo "Unexpected umbrella chart version: $chart_version" >&2
+            exit 1
+          fi
+          latest_patch="${BASH_REMATCH[1]}"
+
+          latest_tag="$(git -C gitops tag --list 'v26.100.*' --sort=-version:refname | head -n 1)"
+          if [[ -n "$latest_tag" ]]; then
+            if [[ ! "$latest_tag" =~ ^v26\.100\.([0-9]+)$ ]]; then
+              echo "Unexpected release tag: $latest_tag" >&2
+              exit 1
+            fi
+            tag_patch="${BASH_REMATCH[1]}"
+            if (( tag_patch > latest_patch )); then
+              latest_patch="$tag_patch"
+            fi
+          fi
+
+          release_tag="v26.100.$((latest_patch + 1))"
+          echo "tag=$release_tag" >> "$GITHUB_OUTPUT"
+          echo "Release tag: $release_tag"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and push frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          platforms: linux/arm64
+          push: true
+          tags: |
+            2024dock/cdc-frontend:${{ steps.release.outputs.tag }}
+            2024dock/cdc-frontend:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          platforms: linux/arm64
+          push: true
+          tags: |
+            2024dock/cdc-backend:${{ steps.release.outputs.tag }}
+            2024dock/cdc-backend:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Update GitOps release manifest
+        env:
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          chart_version="${RELEASE_TAG#v}"
+          export CHART_VERSION="$chart_version"
+
+          yq -i '.spec.values.global.releaseTag = strenv(RELEASE_TAG)' \
+            gitops/minikube/release.yaml
+          yq -i '.spec.values.frontend.image.tag = strenv(RELEASE_TAG)' \
+            gitops/minikube/release.yaml
+          yq -i '.spec.values.backend.image.tag = strenv(RELEASE_TAG)' \
+            gitops/minikube/release.yaml
+          yq -i '.version = strenv(CHART_VERSION) | .appVersion = strenv(RELEASE_TAG)' \
+            gitops/charts/raju-stack/Chart.yaml
+        shell: bash
+
+      - name: Commit and push GitOps release
+        env:
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          cd gitops
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add minikube/release.yaml charts/raju-stack/Chart.yaml
+          git diff --cached --check
+          git commit -m "release: ${RELEASE_TAG}"
+          git push origin "HEAD:${GITOPS_BRANCH}"
+
+      - name: Create GitHub release in GitOps repository
+        env:
+          GH_TOKEN: ${{ secrets.GITOPS_REPO_TOKEN }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          gh release create "$RELEASE_TAG" \
+            --repo "$GITOPS_REPO" \
+            --target "$GITOPS_BRANCH" \
+            --title "$RELEASE_TAG" \
+            --notes "Frontend and backend images released together as ${RELEASE_TAG}. Flux deployment readiness is reported by the raju-stack HelmRelease."
+
+      - name: Release summary
+        env:
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          echo "Release: ${RELEASE_TAG}"
+          echo "Frontend image: 2024dock/cdc-frontend:${RELEASE_TAG}"
+          echo "Backend image: 2024dock/cdc-backend:${RELEASE_TAG}"
+          echo "GitOps repository: ${GITOPS_REPO}, branch: ${GITOPS_BRANCH}"
