@@ -395,6 +395,7 @@ on:
   push:
     branches:
       - main
+      - RTR-007
     paths:
       - "frontend/**"
       - ".github/workflows/frontend-ci.yaml"
